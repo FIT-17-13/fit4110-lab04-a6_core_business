@@ -28,11 +28,17 @@ jobs:
 
       - name: Run Docker container
         run: |
-          docker run -d --rm \
+          docker run -d \
             --name fit4110-iot-lab04 \
             -p 8000:8000 \
             --env-file .env.example \
             fit4110/iot-ingestion:lab04
+
+      - name: Show container startup logs
+        run: |
+          sleep 5
+          docker logs fit4110-iot-lab04 2>&1 || true
+          docker inspect fit4110-iot-lab04 --format='Status: {{.State.Status}} ExitCode: {{.State.ExitCode}}' || true
 
       - name: Wait for service health
         run: npx wait-on http://localhost:8000/health --timeout 30000
@@ -42,15 +48,8 @@ jobs:
 
       - name: Show container logs on failure
         if: failure()
-        run: docker logs fit4110-iot-lab04 || true
+        run: docker logs fit4110-iot-lab04 2>&1 || true
 
       - name: Stop container
         if: always()
         run: docker stop fit4110-iot-lab04 || true
-
-      - name: Upload Newman reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lab04-newman-reports
-          path: reports/
