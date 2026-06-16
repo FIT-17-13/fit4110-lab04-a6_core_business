@@ -1,1 +1,1 @@
-# Core Business Service
+# Core Business Policy Engine package
