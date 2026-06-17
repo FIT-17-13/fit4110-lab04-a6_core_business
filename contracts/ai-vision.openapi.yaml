@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: Smart Campus — AI Vision API
+  version: 0.3.0
+  description: |
+    Contract mock tối thiểu cho consumer-side smoke test trong FIT4110 Lab 03.
+    File này giúp Camera Stream hoặc Core Business gọi thử AI Vision khi service thật chưa hoàn thiện.
+servers:
+  - url: http://localhost:4011
+    description: Prism mock server for AI Vision
+tags:
+  - name: vision
+    description: Image detection
+  - name: system
+    description: Health and runtime information
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [system]
+      operationId: getVisionHealth
+      summary: Kiểm tra trạng thái AI Vision mock
+      description: Public health check dùng để kiểm tra mock AI Vision đã sẵn sàng.
+      security: []
+      responses:
+        "200":
+          description: Service đang hoạt động
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              examples:
+                ok:
+                  value:
+                    status: ok
+                    service: ai-vision
+                    version: 0.3.0
+
+  /detect:
+    post:
+      tags: [vision]
+      operationId: detectImage
+      summary: Phát hiện đối tượng trong ảnh
+      description: Endpoint mock tối thiểu để consumer kiểm tra luồng Camera/Core gọi AI Vision.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DetectionRequest"
+            examples:
+              valid_url:
+                value:
+                  camera_id: CAM01
+                  image_url: https://example.com/frame.jpg
+      responses:
+        "200":
+          description: Kết quả nhận diện
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DetectionResponse"
+              examples:
+                detected:
+                  value:
+                    detection_id: DET001
+                    camera_id: CAM01
+                    label: person
+                    confidence: 0.91
+                    risk_level: medium
+        "400":
+          description: Request không hợp lệ
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              examples:
+                invalid_image:
+                  value:
+                    type: https://smart-campus.local/problems/invalid-image
+                    title: Invalid image
+                    status: 400
+                    detail: image_url or image_base64 is required
+                    instance: /detect
+        "401":
+          description: Thiếu hoặc sai token
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              examples:
+                unauthorized:
+                  value:
+                    type: https://smart-campus.local/problems/unauthorized
+                    title: Unauthorized
+                    status: 401
+                    detail: Missing or invalid bearer token
+                    instance: /detect
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    DetectionRequest:
+      type: object
+      required: [camera_id]
+      properties:
+        camera_id:
+          type: string
+          minLength: 3
+          example: CAM01
+        image_url:
+          type: string
+          format: uri
+          example: https://example.com/frame.jpg
+        image_base64:
+          type: string
+          description: Chuỗi base64 nếu không dùng image_url
+
+    DetectionResponse:
+      type: object
+      required: [detection_id, label, confidence, risk_level]
+      properties:
+        detection_id:
+          type: string
+          example: DET001
+        camera_id:
+          type: string
+          example: CAM01
+        label:
+          type: string
+          enum: [person, vehicle, unknown]
+          example: person
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          example: 0.91
+        risk_level:
+          type: string
+          enum: [low, medium, high]
+          example: medium
+
+    HealthResponse:
+      type: object
+      required: [status, service, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+          example: ok
+        service:
+          type: string
+          example: ai-vision
+        version:
+          type: string
+          example: 0.3.0
+
+    ProblemDetails:
+      type: object
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string

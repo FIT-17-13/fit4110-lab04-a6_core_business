@@ -1,0 +1,303 @@
+openapi: 3.1.0
+info:
+  title: Core Business API - Smart Campus
+  version: 1.0.0
+  description: API trung tâm xử lý quy tắc nghiệp vụ an ninh, chính sách ra/vào trường học và webhook cảnh báo.
+  contact:
+    name: Nhóm A6 - Core Business
+    email: contact@a6-corebusiness.dnu.edu.vn
+
+servers:
+  - url: http://localhost:4010
+    description: Mock server (Prism)
+  - url: http://core-business:8000
+    description: Local Docker environment
+
+paths:
+  /access/check:
+    post:
+      tags: [access]
+      summary: Kiểm tra quyền ra/vào realtime
+      description: Tiếp nhận thông tin quẹt thẻ thẻ RFID từ Access Gate để thẩm định dữ liệu realtime.
+      operationId: checkAccess
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AccessRequest'
+      responses:
+        '200':
+          description: Kết quả đánh giá an ninh thành công
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /policies/access:
+    get:
+      tags: [policies]
+      summary: Danh sách chính sách an ninh (Cursor Pagination)
+      description: Truy xuất danh sách phân trang tất cả chính sách an ninh đang được áp dụng sử dụng con trỏ.
+      operationId: listPolicies
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Danh sách chính sách kèm con trỏ phân trang
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Policy'
+                  nextCursor:
+                    type: string
+                    example: "eyJpZCI6MTB9"
+
+  /policies/access/{policyId}:
+    get:
+      tags: [policies]
+      summary: Lấy thông tin chi tiết một chính sách
+      operationId: getAccessPolicy
+      parameters:
+        - name: policyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trả về thông tin chính sách
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Policy'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /decisions:
+    get:
+      tags: [decisions]
+      summary: Danh sách lịch sử các quyết định ra/vào
+      operationId: listDecisions
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Danh sách quyết định ra/vào
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AccessDecision'
+                  nextCursor:
+                    type: string
+                    example: "Y3Vyc29yX2RlY2lzaW9uXzAwNQ=="
+
+  /decisions/{decisionId}:
+    get:
+      tags: [decisions]
+      summary: Xem lại một quyết định cụ thể
+      operationId: getDecision
+      parameters:
+        - name: decisionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Lịch sử quyết định mẫu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessDecision'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /health:
+    get:
+      tags: [system]
+      summary: Kiểm tra trạng thái dịch vụ
+      operationId: checkHealth
+      responses:
+        '200':
+          description: Hoạt động bình thường
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+webhooks:
+  onAlertTriggered:
+    post:
+      description: Webhook bắn sự kiện sang bên thứ ba khi có cảnh báo khẩn cấp.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [eventId, alertId, severity, message]
+              properties:
+                eventId:
+                  type: string
+                  format: uuid
+                  example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+                alertId:
+                  type: string
+                  example: "ALT-001"
+                severity:
+                  type: string
+                  enum: [low, medium, high, critical]
+                  example: "high"
+                message:
+                  type: string
+                  example: "Phát hiện đối tượng xâm nhập trái phép."
+                timestamp:
+                  type: string
+                  format: date-time
+                  example: "2026-05-19T13:40:00Z"
+      responses:
+        '200':
+          description: Xử lý thành công sự kiện.
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  responses:
+    BadRequest:
+      description: Payload không hợp lệ
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+    NotFound:
+      description: Không tìm thấy tài nguyên
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetails'
+
+  schemas:
+    AccessRequest:
+      type: object
+      required: [cardId, gateId, direction]
+      additionalProperties: false
+      properties:
+        cardId:
+          type: string
+          example: "RFID-2026-001"
+        gateId:
+          type: string
+          example: "gate-main-01"
+        direction:
+          type: string
+          enum: [IN, OUT]
+        idempotencyKey:
+          type: string
+          example: "idem-8899-abc"
+
+    AccessDecision:
+      type: object
+      required: [decisionId, allow, reasonCode]
+      properties:
+        decisionId:
+          type: string
+          example: "DEC-2026-001"
+        allow:
+          type: boolean
+          example: true
+        reasonCode:
+          type: string
+          example: "VALID_CARD"
+        policyId:
+          type: string
+          example: "POL-STUDENT-01"
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-05-02T09:10:00Z"
+        operatorNote:
+          type: string
+          example: "Đã xác nhận thẻ hợp lệ"
+
+    Policy:
+      type: object
+      required: [policyId, policyType]
+      properties:
+        policyId:
+          type: string
+          example: "POL-001"
+        policyType:
+          type: string
+      discriminator:
+        propertyName: policyType
+        mapping:
+          timeBased: '#/components/schemas/TimeBasedPolicy'
+          roleBased: '#/components/schemas/RoleBasedPolicy'
+
+    TimeBasedPolicy:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Policy'
+      properties:
+        allowedHours:
+          type: string
+          example: "07:00-18:00"
+
+    RoleBasedPolicy:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/Policy'
+      properties:
+        allowedRoles:
+          type: array
+          items:
+            type: string
+          example: ["STUDENT", "STAFF"]
+
+    ProblemDetails:
+      type: object
+      required: [title, status, detail]
+      properties:
+        type:
+          type: string
+          example: "https://example.com/probs/invalid-request"
+        title: { type: string, example: "Invalid Request" }
+        status: { type: integer, example: 400 }
+        detail: { type: string, example: "Thiếu trường dữ liệu bắt buộc." }
