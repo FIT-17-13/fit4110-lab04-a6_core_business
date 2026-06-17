@@ -24,32 +24,35 @@ jobs:
         run: npm run lint:openapi
 
       - name: Build Docker image
-        run: docker build -t fit4110/iot-ingestion:lab04 .
+        run: docker build -t fit4110/core-business:lab04 .
 
       - name: Run Docker container
         run: |
           docker run -d \
-            --name fit4110-iot-lab04 \
+            --name fit4110-core-lab04 \
             -p 8000:8000 \
             --env-file .env.example \
-            fit4110/iot-ingestion:lab04
+            fit4110/core-business:lab04
+
+      - name: Start AI Vision Mock (for Consumer-side test)
+        run: npx prism mock contracts/ai-vision.openapi.yaml -p 4011 -d > prism-vision.log 2>&1 &
 
       - name: Show container startup logs
         run: |
           sleep 5
-          docker logs fit4110-iot-lab04 2>&1 || true
-          docker inspect fit4110-iot-lab04 --format='Status: {{.State.Status}} ExitCode: {{.State.ExitCode}}' || true
+          docker logs fit4110-core-lab04 2>&1 || true
+          docker inspect fit4110-core-lab04 --format='Status: {{.State.Status}} ExitCode: {{.State.ExitCode}}' || true
 
-      - name: Wait for service health
-        run: npx wait-on http://localhost:8000/health --timeout 30000
+      - name: Wait for services (GET method enforced)
+        run: npx wait-on http-get://localhost:8000/health http-get://localhost:4011/health --timeout 30000
 
       - name: Run Newman against Docker container
         run: npm run test:local
 
       - name: Show container logs on failure
         if: failure()
-        run: docker logs fit4110-iot-lab04 2>&1 || true
+        run: docker logs fit4110-core-lab04 2>&1 || true
 
       - name: Stop container
         if: always()
-        run: docker stop fit4110-iot-lab04 || true
+        run: docker stop fit4110-core-lab04 || true
